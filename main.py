@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
+from llm import ask_ai
 
 class QueryRequest(BaseModel):
     query: str
@@ -13,4 +14,5 @@ def home():
 
 @app.post("/ask")
 def ask(request: QueryRequest):
-    return {"you_asked": request.query}
+    answer= ask_ai(request.query)
+    return {"answer": answer}

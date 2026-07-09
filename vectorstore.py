@@ -26,3 +26,17 @@ def add_chunk(chunk_id: str, text:str, metadata: dict):
         documents=[text],
         metadatas=[metadata],
     )
+    
+def search(query: str, top_k: int=3):
+    # Convert the user's question into an embedding, same way we did for stored chunks.
+    # This lets us compare "meaning" between the question and stored text.
+    query_embedding= get_embedding(query)
+    
+    # Ask Chroma to find the closest matches by embedding distance.
+    # top_k = how many results to return (e.g. 3 = the 3 most relevant chunks).
+    results = collection.query(
+        query_embeddings=[query_embedding],
+        n_results=top_k,
+    )
+
+    return results

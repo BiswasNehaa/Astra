@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
-from llm import ask_ai
+from rag import answer_with_context
 
 class QueryRequest(BaseModel):
     query: str
@@ -14,5 +14,7 @@ def home():
 
 @app.post("/ask")
 def ask(request: QueryRequest):
-    answer= ask_ai(request.query)
+     # Now using RAG - the answer is grounded in stored context,
+    # not just the AI's raw training knowledge.
+    answer = answer_with_context(request.query)
     return {"answer": answer}

@@ -1,6 +1,6 @@
 # ASTRA
 
-A research assistant for aerospace/defense papers, built with FastAPI + RAG (Retrieval-Augmented Generation).
+A Retrieval-Augmented Generation (RAG) research assistant that helps you search, understand, and query academic papers from arXiv — across any research domain (AI, robotics, physics, medicine, aerospace, and more).
 
 ## Status: Under active development 🚧
 

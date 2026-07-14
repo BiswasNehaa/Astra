@@ -33,9 +33,18 @@ idna==3.18
 importlib_resources==7.1.0
 Jinja2==3.1.6
 joblib==1.5.3
+jsonpatch==1.33
+jsonpointer==3.1.1
 jsonschema==4.26.0
 jsonschema-specifications==2025.9.1
 kubernetes==36.0.2
+langchain-core==1.4.9
+langchain-protocol==0.0.18
+langgraph==1.2.9
+langgraph-checkpoint==4.1.1
+langgraph-prebuilt==1.1.0
+langgraph-sdk==0.4.2
+langsmith==0.10.3
 lxml==6.1.1
 markdown-it-py==4.2.0
 MarkupSafe==3.0.3
@@ -55,6 +64,7 @@ opentelemetry-proto==1.43.0
 opentelemetry-sdk==1.43.0
 opentelemetry-semantic-conventions==0.64b0
 orjson==3.11.9
+ormsgpack==1.12.2
 overrides==7.7.0
 packaging==26.2
 propcache==0.5.2
@@ -73,6 +83,7 @@ referencing==0.37.0
 regex==2026.6.28
 requests==2.33.1
 requests-oauthlib==2.0.0
+requests-toolbelt==1.0.0
 rich==15.0.0
 rpds-py==2026.6.3
 safetensors==0.8.0
@@ -95,8 +106,11 @@ typer==0.26.8
 typing-inspection==0.4.2
 typing_extensions==4.16.0
 urllib3==2.7.0
+uuid_utils==0.17.0
 uvicorn==0.30.6
 watchfiles==1.2.0
 websocket-client==1.9.0
-websockets==16.0
+websockets==15.0.1
+xxhash==3.8.1
 yarl==1.24.2
+zstandard==0.25.0

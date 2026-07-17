@@ -49,6 +49,13 @@ Answer:
     state["is_supported"] = "yes" in verdict
     return state
 
+def decide_next_step(state: GraphState) -> str:
+    # If answer is supported, we are done .
+    # If not, go back and try generating again .
+    if state["is_supported"]:
+        return "end"
+    return "retry"
+
 
 graph = StateGraph(GraphState)
 graph.add_node("generate", generate_node)
@@ -57,5 +64,15 @@ graph.add_node("verify", verify_node)
 graph.set_entry_point("generate")
 graph.add_edge("generate", "verify")
 graph.add_edge("verify", END)
+
+# Conditional edge: After verifying, Either end or go back to generate.
+graph.add_conditional_edges(
+    "verify",
+    decide_next_step,
+    {
+        "end": END,
+        "retry" : "generate",
+    },
+)
 
 compiled_graph = graph.compile()

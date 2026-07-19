@@ -9,6 +9,7 @@ class GraphState(TypedDict):
     context_chunks: list
     answer: str
     is_supported: bool
+    loop_count: int
     
 def generate_node(state: GraphState) -> GraphState:
     from vectorstore import search
@@ -28,6 +29,7 @@ Context:
 Question: {state["question"]}
 """
     state["answer"] = ask_ai(prompt)
+    state["loop_count"] = state.get("loop_count", 0) + 1
     return state
 
 
@@ -54,6 +56,8 @@ def decide_next_step(state: GraphState) -> str:
     # If not, go back and try generating again .
     if state["is_supported"]:
         return "end"
+    if state["loop_count"] >= 2:
+        return "end"  # give up after 2 retries, avoid infinite loop
     return "retry"
 
 

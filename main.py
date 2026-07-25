@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
-from rag import answer_with_context
+from graph import compiled_graph
 from ingestion import ingest_papers
 
 class QueryRequest(BaseModel):
@@ -20,10 +20,14 @@ def home():
 
 @app.post("/ask")
 def ask(request: QueryRequest):
-     # Now using RAG - the answer is grounded in stored context,
-    # not just the AI's raw training knowledge.
-    answer = answer_with_context(request.query)
-    return {"answer": answer}
+    # Now using the self-correcting graph instead of a single-pass answer.
+    # It generates an answer, verifies it against sources, and retries if unsupported.
+    result = compiled_graph.invoke({"question": request.query})
+    return {
+        "answer": result["answer"],
+        "supported": result["is_supported"],
+        "attempts": result["loop_count"],
+    }
 
 
 @app.post("/ingest")

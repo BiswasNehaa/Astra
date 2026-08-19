@@ -106,47 +106,15 @@ honestly, either way
 
 ## 📁 File Structure
 
-User Question
-│
-▼
-┌─────────────────────────────────────────┐
-│ STAGE A: Router (implicit) │
-│ Question passed directly to retrieval │
-└─────────────────┬────────────────────────┘
-│
-▼
-┌─────────────────────────────────────────┐
-│ STAGE B: Semantic Retrieval │
-│ Question → embedding → search Chroma │
-│ → top-k most similar stored chunks │
-└─────────────────┬────────────────────────┘
-│
-▼
-┌─────────────────────────────────────────┐
-│ STAGE C: Answer Generation │
-│ Retrieved chunks + question → LLM │
-│ → draft answer │
-└─────────────────┬────────────────────────┘
-│
-▼
-┌─────────────────────────────────────────┐
-│ STAGE D: Verification │
-│ Draft answer + same chunks → LLM │
-│ → "is this answer actually supported?" │
-└─────────────────┬────────────────────────┘
-│
-┌─────────┴──────────┐
-│ │
-Supported? Not supported?
-│ │
-▼ ▼
-Return answer Retry Stage C→D
-(max 2 attempts)
-│
-▼
-Return best answer,
-honestly, either way
-
+```mermaid
+flowchart TD
+    A[User question] --> B[Semantic retrieval]
+    B --> C[Answer generation]
+    C --> D[Verification]
+    D -->|Supported| E[Return answer]
+    D -->|Not supported, retries left| C
+    D -->|Retry cap hit| E
+```
 
 **The crucial insight:** unlike the Academic Advisor project (where Python did the hard logic and the LLM only narrated), here the LLM does both the answering *and* the checking — but as two **separate, independent calls** with different, narrow instructions. The verifier is never told "you just wrote this, was it good?" — it's given the answer and the sources fresh, and asked a strict, narrow yes/no question. This separation is what keeps the check honest instead of the AI just agreeing with itself.
 
@@ -155,33 +123,18 @@ honestly, either way
 ## 📁 File Structure
 
 Astra/
-│
-├── main.py ← FastAPI app, defines /ask and /ingest endpoints
-├── graph.py ← LangGraph pipeline: generate → verify → retry loop
-├── rag.py ← Original single-pass RAG function (answer_with_context) - superseded by graph.py but kept for reference
-├── llm.py ← ask_ai() - wraps the Groq API call
-├── embeddings.py ← get_embedding() - converts text to vectors using BGE
-├── vectorstore.py ← add_chunk() and search() - Chroma database operations
-├── ingestion.py ← fetch_papers(), chunk_text(), ingest_papers() - arXiv pipeline
-├── config.py ← Loads GROQ_API_KEY from .env
-│
-├── .env ← Your API key (never committed to git)
-├── .env.example ← Template showing what .env should contain
-├── .gitignore ← Excludes .env, pycache, data/chroma/, .venv/
-├── requirements.txt ← Python dependencies
-├── Dockerfile ← Container build instructions
-├── .dockerignore ← Excludes .venv, .git, data/chroma/ from Docker builds
-│
-├── LICENSE ← MIT
-├── CONTRIBUTING.md ← How to contribute
-├── .github/
-│ └── ISSUE_TEMPLATE/
-│ ├── bug_report.md
-│ └── feature_request.md
-│
-└── data/
-└── chroma/ ← Auto-generated vector database (not committed to git)
-
+├── main.py          # FastAPI app, /ask and /ingest endpoints
+├── graph.py          # LangGraph pipeline: generate → verify → retry
+├── rag.py            # Original single-pass RAG (superseded, kept for reference)
+├── llm.py             # ask_ai() — wraps the Groq API call
+├── embeddings.py       # get_embedding() — BGE embeddings
+├── vectorstore.py       # add_chunk(), search() — Chroma operations
+├── ingestion.py          # fetch_papers(), chunk_text(), ingest_papers()
+├── config.py              # Loads GROQ_API_KEY from .env
+├── data/chroma/            # Auto-generated vector DB (gitignored)
+├── requirements.txt
+├── Dockerfile
+└── LICENSE
 
 ---
 

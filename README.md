@@ -58,54 +58,6 @@ ASTRA addresses this by:
 
 ## 🏗 System Architecture — The Big Picture
 
-User Question
-│
-▼
-┌─────────────────────────────────────────┐
-│ STAGE A: Router (implicit) │
-│ Question passed directly to retrieval │
-└─────────────────┬────────────────────────┘
-│
-▼
-┌─────────────────────────────────────────┐
-│ STAGE B: Semantic Retrieval │
-│ Question → embedding → search Chroma │
-│ → top-k most similar stored chunks │
-└─────────────────┬────────────────────────┘
-│
-▼
-┌─────────────────────────────────────────┐
-│ STAGE C: Answer Generation │
-│ Retrieved chunks + question → LLM │
-│ → draft answer │
-└─────────────────┬────────────────────────┘
-│
-▼
-┌─────────────────────────────────────────┐
-│ STAGE D: Verification │
-│ Draft answer + same chunks → LLM │
-│ → "is this answer actually supported?" │
-└─────────────────┬────────────────────────┘
-│
-┌─────────┴──────────┐
-│ │
-Supported? Not supported?
-│ │
-▼ ▼
-Return answer Retry Stage C→D
-(max 2 attempts)
-│
-▼
-Return best answer,
-honestly, either way
-
-
-**The crucial insight:** unlike the Academic Advisor project (where Python did the hard logic and the LLM only narrated), here the LLM does both the answering *and* the checking — but as two **separate, independent calls** with different, narrow instructions. The verifier is never told "you just wrote this, was it good?" — it's given the answer and the sources fresh, and asked a strict, narrow yes/no question. This separation is what keeps the check honest instead of the AI just agreeing with itself.
-
----
-
-## 📁 File Structure
-
 ```mermaid
 flowchart TD
     A[User question] --> B[Semantic retrieval]
@@ -116,7 +68,7 @@ flowchart TD
     D -->|Retry cap hit| E
 ```
 
-**The crucial insight:** unlike the Academic Advisor project (where Python did the hard logic and the LLM only narrated), here the LLM does both the answering *and* the checking — but as two **separate, independent calls** with different, narrow instructions. The verifier is never told "you just wrote this, was it good?" — it's given the answer and the sources fresh, and asked a strict, narrow yes/no question. This separation is what keeps the check honest instead of the AI just agreeing with itself.
+**The crucial insight:** Here the LLM does both the answering *and* the checking — but as two **separate, independent calls** with different, narrow instructions. The verifier is never told "you just wrote this, was it good?" — it's given the answer and the sources fresh, and asked a strict, narrow yes/no question. This separation is what keeps the check honest instead of the AI just agreeing with itself.
 
 ---
 

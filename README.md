@@ -58,14 +58,51 @@ ASTRA addresses this by:
 
 ## 🏗 System Architecture — The Big Picture
 
-```mermaid
-flowchart TD
-    A[User question] --> B[Semantic retrieval]
-    B --> C[Answer generation]
-    C --> D[Verification]
-    D -->|Supported| E[Return answer]
-    D -->|Not supported, retries left| C
-    D -->|Retry cap hit| E
+```
+Student Input (career goal + completed courses + credit limit + question)
+        │
+        ▼
+┌─────────────────────────────────────────┐
+│  STAGE A: Career Keyword Lookup         │
+│  career.json → list of skill keywords   │
+└─────────────────┬───────────────────────┘
+                  │
+                  ▼
+┌─────────────────────────────────────────┐
+│  STAGE B: Course History Enrichment     │
+│  "Intro to Python" → "BPLCK105B/205B"   │
+│  Python exact match first, LLM fallback │
+└─────────────────┬───────────────────────┘
+                  │
+                  ▼
+┌─────────────────────────────────────────┐
+│  STAGE C: FAISS Semantic Retrieval      │
+│  Query → embeddings → top-k similar     │
+│  courses from vector database           │
+└─────────────────┬───────────────────────┘
+                  │
+                  ▼
+┌─────────────────────────────────────────┐
+│  STAGE D: Python-Side Filtering         │
+│  ✅ Are prerequisites met?              │
+│  ✅ Is the course career-relevant?      │
+│  ✅ Will it fit within credit limit?    │
+│  ✅ Not already completed?              │
+└─────────────────┬───────────────────────┘
+                  │
+                  ▼
+┌─────────────────────────────────────────┐
+│  STAGE E: LLM Roadmap Generation        │
+│  Filtered pool → LLaMA 3.3 70B          │
+│  → Structured JSON roadmap              │
+└─────────────────┬───────────────────────┘
+                  │
+                  ▼
+┌─────────────────────────────────────────┐
+│  STAGE F: Display                       │
+│  JSON → Pretty terminal output OR       │
+│  Streamlit UI with styled cards         │
+└─────────────────────────────────────────┘
 ```
 
 **The crucial insight:** Here the LLM does both the answering *and* the checking — but as two **separate, independent calls** with different, narrow instructions. The verifier is never told "you just wrote this, was it good?" — it's given the answer and the sources fresh, and asked a strict, narrow yes/no question. This separation is what keeps the check honest instead of the AI just agreeing with itself.
@@ -74,6 +111,7 @@ flowchart TD
 
 ## 📁 File Structure
 
+```
 Astra/
 ├── main.py          # FastAPI app, /ask and /ingest endpoints
 ├── graph.py          # LangGraph pipeline: generate → verify → retry
@@ -88,6 +126,7 @@ Astra/
 ├── Dockerfile
 └── LICENSE
 
+```
 ---
 
 ## 🔬 Complete Pipeline Walkthrough

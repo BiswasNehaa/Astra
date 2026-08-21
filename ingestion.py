@@ -1,20 +1,19 @@
 import arxiv
 from vectorstore import add_chunk
 
-def fetch_papers(query: str, max_results: int=5):
-    # Search arXiv for papers matching the query, sorted by newest first.
-    client= arxiv.Client()
-    
-    search= arxiv.Search(
-        query= query,
-        max_results= max_results,
-        sort_by=arxiv.SortCriterion.Relevance,
-    )
-    
-    
-     # client.results(search) is what actually sends the request and fetches results
-    papers = list(client.results(search))
+def fetch_papers(query: str, max_results: int = 5, sort_by_date: bool = False):
+    client = arxiv.Client()
 
+    # Default: sort by relevance (best for general search/ask).
+    # sort_by_date=True: sort by newest first (best for "recent research" summaries).
+    sort_order = arxiv.SortCriterion.SubmittedDate if sort_by_date else arxiv.SortCriterion.Relevance
+
+    search = arxiv.Search(
+        query=query,
+        max_results=max_results,
+        sort_by=sort_order,
+    )
+    papers = list(client.results(search))
     return papers
 
 def chunk_text(text: str, chunk_size: int = 100, overlap: int = 20):

@@ -64,3 +64,23 @@ def ingest_papers(query:str, max_results: int=5):
             total_chunks_saved += 1
 
     return total_chunks_saved
+
+def summarize_paper(paper):
+    from llm import ask_ai
+
+    prompt = f"""Summarize this research paper abstract in 2-3 clear sentences,
+for someone doing a literature review. Focus on what the paper actually did
+and found - not generic filler sentences.
+
+Title: {paper.title}
+Abstract: {paper.summary}
+"""
+    summary = ask_ai(prompt)
+
+    return {
+        "title": paper.title,
+        "authors": [author.name for author in paper.authors],
+        "published": str(paper.published.date()),
+        "url": paper.entry_id,
+        "summary": summary,
+    }

@@ -84,3 +84,32 @@ Abstract: {paper.summary}
         "url": paper.entry_id,
         "summary": summary,
     }
+    
+def summarize_topic(topic: str, max_results: int = 5):
+    from llm import ask_ai
+
+    # Step 1: get the most recent papers on this topic
+    papers = fetch_papers(topic, max_results=max_results, sort_by_date=True)
+
+    # Step 2: summarize each paper individually
+    paper_summaries = [summarize_paper(paper) for paper in papers]
+
+    # Step 3: build one combined overview across all summaries
+    combined_text = "\n\n".join(
+        f"{p['title']} ({p['published']}): {p['summary']}"
+        for p in paper_summaries
+    )
+
+    overview_prompt = f"""Based on these {len(paper_summaries)} paper summaries about "{topic}",
+write a short overview (3-5 sentences). If the papers are NOT closely related to each other,
+say so explicitly instead of forcing connections between them.
+
+{combined_text}
+"""
+    overall_summary = ask_ai(overview_prompt)
+
+    return {
+        "topic": topic,
+        "papers": paper_summaries,
+        "overall_summary": overall_summary,
+    }

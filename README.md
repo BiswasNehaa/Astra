@@ -340,6 +340,7 @@ POST /ask
 - **Free-tier deployment is memory-constrained.** Local embedding model + PyTorch typically exceed the 512MB RAM limit on Render's free tier. Fully verified working locally and in Docker; production deployment would need a paid instance or a hosted embeddings API instead of a locally-run model.
 - **No per-user rate limiting yet** on the `/ask` endpoint — relies on Groq's own free-tier limits.
 - **arXiv's own search is keyword-based, not semantic** — candidate papers pulled by `fetch_papers()` can be loosely topically related; ASTRA's own embedding search provides the actual precision layer on top.
+- **Sources list shows all retrieved chunks, not just ones actually used in the answer** — may include loosely-related or unlabeled (test data) entries.
 
 ---
 

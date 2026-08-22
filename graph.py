@@ -2,22 +2,33 @@ from langgraph.graph import StateGraph, END
 from typing import TypedDict
 
 
-# LangGraph needs a defined "state" - basically a dictionary describing
-# what information flows between each step of the pipeline.
 class GraphState(TypedDict):
     question: str
     context_chunks: list
     answer: str
     is_supported: bool
     loop_count: int
-    
+    sources: list
+
+
 def generate_node(state: GraphState) -> GraphState:
     from vectorstore import search
     from llm import ask_ai
 
     results = search(state["question"], top_k=3)
     chunks = results["documents"][0]
+    metadatas = results["metadatas"][0]
     state["context_chunks"] = chunks
+
+    # Build a simple sources list - one entry per chunk, deduplicated by title
+    sources = []
+    seen_titles = set()
+    for m in metadatas:
+        title = m.get("title", "Unknown")
+        if title not in seen_titles:
+            sources.append({"title": title, "url": m.get("url", "")})
+            seen_titles.add(title)
+    state["sources"] = sources
 
     context = "\n\n".join(chunks)
     prompt = f"""Answer the question using ONLY the context below.
@@ -51,13 +62,12 @@ Answer:
     state["is_supported"] = "yes" in verdict
     return state
 
+
 def decide_next_step(state: GraphState) -> str:
-    # If answer is supported, we are done .
-    # If not, go back and try generating again .
     if state["is_supported"]:
         return "end"
     if state["loop_count"] >= 2:
-        return "end"  # give up after 2 retries, avoid infinite loop
+        return "end"
     return "retry"
 
 
@@ -67,15 +77,13 @@ graph.add_node("verify", verify_node)
 
 graph.set_entry_point("generate")
 graph.add_edge("generate", "verify")
-graph.add_edge("verify", END)
 
-# Conditional edge: After verifying, Either end or go back to generate.
 graph.add_conditional_edges(
     "verify",
     decide_next_step,
     {
         "end": END,
-        "retry" : "generate",
+        "retry": "generate",
     },
 )
 

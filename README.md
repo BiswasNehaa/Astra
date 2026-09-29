@@ -47,7 +47,7 @@ ASTRA addresses this by:
 | **Python** | Core language | Standard for AI/ML work, huge ecosystem |
 | **FastAPI** | Web API framework | Async-friendly, automatic docs (`/docs`), minimal boilerplate compared to Flask |
 | **LangGraph** | Orchestrates the self-correction loop | Regular LangChain chains only go in a straight line; LangGraph supports **conditional loops** — essential for "retry if unsupported" logic |
-| **Groq (LLaMA 3.3 70B)** | LLM for generation and verification | Free tier, very fast inference, strong enough for both answering and fact-checking |
+| **Groq (`openai/gpt-oss-120b`)** | LLM for generation and verification | Free tier, very fast inference, strong enough for both answering and fact-checking |
 | **sentence-transformers (`bge-small-en-v1.5`)** | Embedding model | Runs locally, free, no API cost; BGE is specifically trained for retrieval tasks (as opposed to general-purpose embedding models) |
 | **ChromaDB** | Vector database | Simpler than FAISS/Qdrant for a project this size — built-in persistence and metadata filtering with far less setup code |
 | **arXiv API** | Data source | Free, official, no scraping — but abstracts only (see Design Decisions) |
@@ -221,7 +221,7 @@ Astra/
 ### `llm.py`
 
 #### `ask_ai(question: str) → str`
-**What:** Sends a single message to Groq's `llama-3.3-70b-versatile` model and returns the text response.
+**What:** Sends a single message to Groq's `openai/gpt-oss-120b` model and returns the text response.
 
 **Why this is a separate file from `rag.py`/`graph.py`:** keeps the raw "talk to the LLM" logic isolated from the RAG-specific logic (prompt building, context injection) — a clean separation of concerns.
 
@@ -362,4 +362,4 @@ POST /ask
 
 ---
 
-*Built with FastAPI · LangGraph · Groq (LLaMA 3.3 70B) · sentence-transformers (BGE) · ChromaDB · Docker*
+*Built with FastAPI · LangGraph · Groq (`openai/gpt-oss-120b`) · sentence-transformers (BGE) · ChromaDB · Docker*

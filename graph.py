@@ -5,10 +5,12 @@ from typing import TypedDict
 class GraphState(TypedDict):
     question: str
     context_chunks: list
+    context_chunk_metadatas: list
     answer: str
     is_supported: bool
     loop_count: int
     sources: list
+    citations: list
 
 
 def generate_node(state: GraphState) -> GraphState:
@@ -25,6 +27,9 @@ def generate_node(state: GraphState) -> GraphState:
     chunks = results["documents"][0]
     metadatas = results["metadatas"][0]
     state["context_chunks"] = chunks
+    # Kept per-chunk (not deduplicated) so cite_node can map a chunk index
+    # back to the paper it came from.
+    state["context_chunk_metadatas"] = metadatas
 
     # Build a simple sources list - one entry per chunk, deduplicated by title
     sources = []
@@ -84,6 +89,60 @@ Answer:
     return state
 
 
+def cite_node(state: GraphState) -> GraphState:
+    from llm import ask_ai
+    import json
+
+    # Citing a "not reliably supported" fallback answer doesn't make sense -
+    # only attribute claims once verification has actually passed.
+    if not state.get("is_supported"):
+        state["citations"] = []
+        return state
+
+    numbered_context = "\n\n".join(
+        f"[{i}] {chunk}" for i, chunk in enumerate(state["context_chunks"])
+    )
+    cite_prompt = f"""Match each distinct claim in the ANSWER to the CONTEXT
+chunk(s) (labeled [N]) that directly support it.
+Respond with ONLY a JSON array, no other text, in this exact shape:
+[{{"claim": "...", "supporting_chunk_ids": [0, 2]}}]
+If a claim isn't directly supported by any chunk, use an empty list.
+
+Context:
+{numbered_context}
+
+Answer:
+{state["answer"]}
+"""
+    raw = ask_ai(cite_prompt, temperature=0)
+
+    try:
+        # Models sometimes wrap the array in prose or a code fence -
+        # pull out just the [...] portion before parsing.
+        start = raw.index("[")
+        end = raw.rindex("]") + 1
+        claims = json.loads(raw[start:end])
+    except (ValueError, json.JSONDecodeError):
+        claims = []
+
+    metadatas = state.get("context_chunk_metadatas", [])
+    citations = []
+    for claim in claims:
+        chunk_ids = claim.get("supporting_chunk_ids", [])
+        matched_sources = [
+            {
+                "title": metadatas[i].get("title", "Unknown"),
+                "url": metadatas[i].get("url", ""),
+            }
+            for i in chunk_ids
+            if isinstance(i, int) and 0 <= i < len(metadatas)
+        ]
+        citations.append({"claim": claim.get("claim", ""), "sources": matched_sources})
+
+    state["citations"] = citations
+    return state
+
+
 def decide_next_step(state: GraphState) -> str:
     if state["is_supported"]:
         return "end"
@@ -95,6 +154,7 @@ def decide_next_step(state: GraphState) -> str:
 graph = StateGraph(GraphState)
 graph.add_node("generate", generate_node)
 graph.add_node("verify", verify_node)
+graph.add_node("cite", cite_node)
 
 graph.set_entry_point("generate")
 graph.add_edge("generate", "verify")
@@ -103,9 +163,10 @@ graph.add_conditional_edges(
     "verify",
     decide_next_step,
     {
-        "end": END,
+        "end": "cite",
         "retry": "generate",
     },
 )
+graph.add_edge("cite", END)
 
 compiled_graph = graph.compile()

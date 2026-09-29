@@ -158,9 +158,11 @@ Astra/
 
 ### Stage D — Verification (the differentiator)
 
-**What it does:** Takes the generated answer and the *same* source chunks, and asks the AI a completely separate, narrow question: "is this answer fully supported by this context? Respond with only yes or no." The response is converted into a boolean (`is_supported`).
+**What it does:** Takes the generated answer and the *same* source chunks, and asks the AI a completely separate, narrow question: does every factual claim in the answer trace back to the context? The response is converted into a boolean (`is_supported`).
 
 **Why a separate call, not the same conversation:** If you asked the same AI "was your last answer correct?" in the same context, it tends to just agree with itself. A fresh call with only the raw answer + raw sources, and strict instructions, produces a more genuinely independent check.
+
+**Why `temperature=0` for this call specifically:** the verifier's job is a consistency check, not creative writing — at a nonzero temperature the same answer+context pair could get judged "yes" on one run and "no" on the next. Pinning `temperature=0` makes the yes/no verdict itself deterministic. The verdict is also parsed strictly (`verdict.startswith("yes")`), so a hedge like "yes, mostly, though X isn't stated" is correctly treated as unsupported rather than passing on a loose substring match.
 
 **What "supported" actually means here:** the verifier checks *consistency with the retrieved text*, not real-world factual accuracy. An honest "I don't know" answer correctly passes verification, because it's consistent with context that doesn't contain the answer. This was directly observed during testing and is an intentional, documented scope of what verification means in this system.
 
@@ -171,6 +173,10 @@ Astra/
 **What it does:** If `is_supported` is `False` and the retry count hasn't hit the cap (2 attempts), the graph loops back to Stage C with the same question, generating a new attempt. If supported, or if the retry cap is reached, the graph ends and returns the current answer.
 
 **Why a retry cap, not unlimited retries:** without a limit, a question the system genuinely can't answer from its data would loop forever. The cap guarantees the system always terminates and returns *something*, even if imperfect — this was a deliberate fix added after building the initial loop, once the infinite-loop risk was identified.
+
+**Why each retry actually widens retrieval:** an earlier version re-ran the exact same `top_k=3` search on every retry — meaning a failed verification triggered an identical generation call with identical context, relying on pure randomness to produce a different (hopefully better-supported) answer. Retries now widen retrieval (`top_k = 3 + 2 × attempt`), so a second attempt genuinely has more source material to draw from, not just another roll of the dice on the same three chunks.
+
+**What happens when the retry cap is hit and the answer is still unsupported:** rather than silently returning the last (possibly hallucinated) draft as if it were a normal answer, the system rewrites it into an explicit "I don't have enough reliably supported information to answer this confidently" message, with the unverified best attempt included for transparency. This directly enforces the project's core design goal — never let the system confidently state something its sources don't support — even in the worst case where verification never succeeds.
 
 ---
 
@@ -335,7 +341,7 @@ POST /ask
 ## ⚠️ Known Limitations
 
 - **Abstracts only, not full papers.** Ingestion pulls arXiv abstracts (150-250 words), not full PDF text. ASTRA can answer questions about a paper's main claims, methods at a high level, and general findings — but not fine-grained details (exact numbers, full methodology, limitations sections) that only appear in the full paper body. Full-text PDF ingestion is tracked as an open contribution issue.
-- **Verification checks consistency, not ground truth.** The verifier confirms an answer matches the retrieved context — it does not independently confirm the retrieved context itself is factually correct. An honestly-worded "I don't know" answer correctly passes verification.
+- **Verification checks consistency, not ground truth.** The verifier confirms an answer matches the retrieved context — it does not independently confirm the retrieved context itself is factually correct. An honestly-worded "I don't know" answer correctly passes verification. If the retrieved chunks themselves are wrong or off-topic (e.g. `top_k` widening on retry still surfaces irrelevant chunks because nothing relevant exists in the vector store for that topic), the answer can be "supported" by bad context — ingest more/better papers on the topic first if answers seem consistently off.
 - **Free-tier deployment is memory-constrained.** Local embedding model + PyTorch typically exceed the 512MB RAM limit on Render's free tier. Fully verified working locally and in Docker; production deployment would need a paid instance or a hosted embeddings API instead of a locally-run model.
 - **No per-user rate limiting yet** on the `/ask` endpoint — relies on Groq's own free-tier limits.
 - **arXiv's own search is keyword-based, not semantic** — candidate papers pulled by `fetch_papers()` can be loosely topically related; ASTRA's own embedding search provides the actual precision layer on top.

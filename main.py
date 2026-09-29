@@ -1,20 +1,20 @@
 from fastapi import FastAPI
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from graph import compiled_graph
 from ingestion import ingest_papers
 from ingestion import summarize_topic
 
 class QueryRequest(BaseModel):
-    query: str
-    
-    
+    query: str = Field(..., min_length=1)
+
+
 class IngestRequest(BaseModel):
-    topic: str
-    max_results: int=5
-    
+    topic: str = Field(..., min_length=1)
+    max_results: int = Field(default=5, ge=1, le=20)
+
 class SummarizeRequest(BaseModel):
-    topic: str
-    max_results: int = 5
+    topic: str = Field(..., min_length=1)
+    max_results: int = Field(default=5, ge=1, le=20)
      
 app= FastAPI()
 

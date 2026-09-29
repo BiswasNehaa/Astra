@@ -112,13 +112,13 @@ User Question
 
 ```
 Astra/
-├── main.py          # FastAPI app, /ask and /ingest endpoints
+├── main.py          # FastAPI app, /ask, /ingest, and /summarize_topic endpoints
 ├── graph.py          # LangGraph pipeline: generate → verify → retry
 ├── rag.py            # Original single-pass RAG (superseded, kept for reference)
 ├── llm.py             # ask_ai() — wraps the Groq API call
 ├── embeddings.py       # get_embedding() — BGE embeddings
 ├── vectorstore.py       # add_chunk(), search() — Chroma operations
-├── ingestion.py          # fetch_papers(), chunk_text(), ingest_papers()
+├── ingestion.py          # fetch_papers(), chunk_text(), ingest_papers(), summarize_paper(), summarize_topic()
 ├── config.py              # Loads GROQ_API_KEY from .env
 ├── data/chroma/            # Auto-generated vector DB (gitignored)
 ├── requirements.txt
@@ -174,6 +174,16 @@ Astra/
 
 ---
 
+### Stage F — Topic Summarization (`/summarize_topic`, a separate feature from `/ask`)
+
+**What it does:** Given a topic, fetches the most recent arXiv papers on it (newest-first, unlike the relevance-sorted retrieval used elsewhere), summarizes each paper individually in 2-3 sentences, then writes one combined overview across all of them.
+
+**Why this is separate from the `/ask` pipeline:** `/ask` answers a specific question from previously *ingested* chunks in the vector store. `/summarize_topic` is a standalone "give me the current state of research on X" tool — it fetches and summarizes papers live, on demand, without touching Chroma at all.
+
+**Why it explicitly checks for unrelated papers:** the overview prompt is instructed to say so honestly if the fetched papers aren't closely related to each other, rather than forcing artificial connections between unrelated results — the same "don't fabricate coherence" principle behind the rest of ASTRA's design.
+
+---
+
 ## 🔧 Every Function Explained
 
 ### `embeddings.py`
@@ -216,6 +226,12 @@ Astra/
 
 **Why unique chunk IDs use `{arxiv_id}_chunk_{index}`:** guarantees no collision between chunks from different papers or different positions within the same paper.
 
+#### `summarize_paper(paper) → dict`
+**What:** Summarizes a single paper's abstract in 2-3 sentences via an LLM call, and returns it alongside the paper's title, authors, publication date, and URL.
+
+#### `summarize_topic(topic: str, max_results: int = 5) → dict`
+**What:** Fetches the most recent papers on a topic (`sort_by_date=True`), runs `summarize_paper()` on each, then makes one more LLM call to produce a short combined overview across all the individual summaries. Returns the topic, the list of per-paper summaries, and the overall overview.
+
 ---
 
 ### `llm.py`
@@ -249,6 +265,9 @@ Astra/
 
 #### `POST /ask`
 **What:** Accepts `{"query": str}`, invokes the compiled LangGraph pipeline, and returns the final answer along with `supported` (bool) and `attempts` (loop count) — deliberately exposing this metadata so API consumers can see whether an answer was verified, not just trust it blindly.
+
+#### `POST /summarize_topic`
+**What:** Accepts `{"topic": str, "max_results": int}`, calls `summarize_topic()`, and returns `{"topic": str, "papers": [...], "overall_summary": str}` — a live, on-demand literature-review-style overview of a topic, independent of anything previously ingested.
 
 ---
 
@@ -312,6 +331,27 @@ POST /ask
   "answer": "A spacecraft can be moved between two circular orbits using a Hohmann transfer orbit, which involves two engine burns.",
   "supported": true,
   "attempts": 1
+}
+```
+
+**Step 3 — Get a live overview of recent research on a topic (no ingestion needed):**
+```json
+POST /summarize_topic
+{"topic": "quantum error correction", "max_results": 3}
+```
+```json
+{
+  "topic": "quantum error correction",
+  "papers": [
+    {
+      "title": "...",
+      "authors": ["..."],
+      "published": "2026-01-15",
+      "url": "https://arxiv.org/abs/...",
+      "summary": "..."
+    }
+  ],
+  "overall_summary": "..."
 }
 ```
 

@@ -124,6 +124,7 @@ Astra/
 ├── vectorstore.py       # add_chunk(), search() — Chroma operations
 ├── ingestion.py          # fetch_papers(), chunk_text(), ingest_papers(), summarize_paper(), summarize_topic()
 ├── config.py              # Loads GROQ_API_KEY from .env
+├── static/index.html       # Minimal demo UI, served at /ui/
 ├── data/chroma/            # Auto-generated vector DB (gitignored)
 ├── requirements.txt
 ├── Dockerfile
@@ -310,7 +311,7 @@ Get a free key at [console.groq.com](https://console.groq.com)
 ```bash
 uvicorn main:app --reload
 ```
-Visit `http://127.0.0.1:8000/docs` to test endpoints interactively.
+Visit `http://127.0.0.1:8000/docs` to test endpoints interactively, or `http://127.0.0.1:8000/ui/` for a simple demo page to ingest a topic and ask questions from the browser.
 
 ### 6. Run with Docker
 ```bash

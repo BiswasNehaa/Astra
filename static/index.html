@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ASTRA — Self-Correcting RAG Research Assistant</title>
+<style>
+  :root {
+    --bg: #0b0f14;
+    --panel: #131a22;
+    --border: #223042;
+    --text: #e6edf3;
+    --muted: #8b98a5;
+    --accent: #4fa3ff;
+    --good: #35c07a;
+    --bad: #e5534b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px 16px 64px;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; }
+  h1 { font-size: 1.5rem; margin-bottom: 4px; }
+  .sub { color: var(--muted); margin-top: 0; margin-bottom: 24px; font-size: 0.95rem; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .tab {
+    padding: 8px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 0.9rem;
+  }
+  .tab.active { border-color: var(--accent); color: var(--accent); }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    display: none;
+  }
+  .panel.active { display: block; }
+  label { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 6px; }
+  input, textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: #0e141b;
+    color: var(--text);
+    font-size: 0.95rem;
+    margin-bottom: 14px;
+  }
+  button {
+    background: var(--accent);
+    color: #06111d;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 0.95rem;
+  }
+  button:disabled { opacity: 0.6; cursor: default; }
+  .result { margin-top: 18px; border-top: 1px solid var(--border); padding-top: 16px; }
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    margin-left: 8px;
+  }
+  .badge.good { background: rgba(53,192,122,0.15); color: var(--good); }
+  .badge.bad { background: rgba(229,83,75,0.15); color: var(--bad); }
+  .answer { line-height: 1.5; white-space: pre-wrap; }
+  .meta { color: var(--muted); font-size: 0.85rem; margin-top: 8px; }
+  .sources { margin-top: 12px; }
+  .sources a { color: var(--accent); text-decoration: none; }
+  .sources li { margin-bottom: 4px; font-size: 0.9rem; }
+  .paper { margin-bottom: 14px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+  .paper:last-child { border-bottom: none; }
+  .paper-title { font-weight: 600; margin-bottom: 4px; }
+  .paper-meta { color: var(--muted); font-size: 0.8rem; margin-bottom: 6px; }
+  .error { color: var(--bad); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🛰️ ASTRA</h1>
+  <p class="sub">Self-correcting RAG research assistant — answers grounded in retrieved paper abstracts, verified before they're returned.</p>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="ask">Ask</button>
+    <button class="tab" data-tab="ingest">Ingest</button>
+    <button class="tab" data-tab="summarize">Summarize Topic</button>
+  </div>
+
+  <div class="panel active" id="panel-ask">
+    <label for="ask-query">Question</label>
+    <input id="ask-query" placeholder="How do you move a spacecraft between two orbits?" />
+    <button id="ask-btn" onclick="doAsk()">Ask</button>
+    <div class="result" id="ask-result"></div>
+  </div>
+
+  <div class="panel" id="panel-ingest">
+    <label for="ingest-topic">Topic</label>
+    <input id="ingest-topic" placeholder="quantum computing" />
+    <label for="ingest-max">Max results</label>
+    <input id="ingest-max" type="number" value="5" min="1" max="20" />
+    <button id="ingest-btn" onclick="doIngest()">Ingest</button>
+    <div class="result" id="ingest-result"></div>
+  </div>
+
+  <div class="panel" id="panel-summarize">
+    <label for="summarize-topic">Topic</label>
+    <input id="summarize-topic" placeholder="quantum error correction" />
+    <label for="summarize-max">Max results</label>
+    <input id="summarize-max" type="number" value="5" min="1" max="20" />
+    <button id="summarize-btn" onclick="doSummarize()">Summarize</button>
+    <div class="result" id="summarize-result"></div>
+  </div>
+</div>
+
+<script>
+  document.querySelectorAll(".tab").forEach((tab) => {
+    tab.addEventListener("click", () => {
+      document.querySelectorAll(".tab").forEach((t) => t.classList.remove("active"));
+      document.querySelectorAll(".panel").forEach((p) => p.classList.remove("active"));
+      tab.classList.add("active");
+      document.getElementById("panel-" + tab.dataset.tab).classList.add("active");
+    });
+  });
+
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  async function postJSON(url, body) {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) {
+      throw new Error(`Request failed (${response.status})`);
+    }
+    return response.json();
+  }
+
+  async function doAsk() {
+    const btn = document.getElementById("ask-btn");
+    const out = document.getElementById("ask-result");
+    const query = document.getElementById("ask-query").value.trim();
+    if (!query) return;
+
+    btn.disabled = true;
+    out.innerHTML = "<p class=\"meta\">Retrieving sources and generating a verified answer…</p>";
+
+    try {
+      const data = await postJSON("/ask", { query });
+      const badge = data.supported
+        ? '<span class="badge good">SUPPORTED</span>'
+        : '<span class="badge bad">NOT FULLY SUPPORTED</span>';
+
+      const sources = (data.sources || [])
+        .map((s) => `<li><a href="${escapeHtml(s.url)}" target="_blank" rel="noopener">${escapeHtml(s.title)}</a></li>`)
+        .join("");
+
+      out.innerHTML = `
+        <div class="answer">${escapeHtml(data.answer)}${badge}</div>
+        <div class="meta">${data.attempts} attempt(s)</div>
+        ${sources ? `<ul class="sources">${sources}</ul>` : ""}
+      `;
+    } catch (err) {
+      out.innerHTML = `<p class="error">${escapeHtml(err.message)}</p>`;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function doIngest() {
+    const btn = document.getElementById("ingest-btn");
+    const out = document.getElementById("ingest-result");
+    const topic = document.getElementById("ingest-topic").value.trim();
+    const maxResults = parseInt(document.getElementById("ingest-max").value, 10) || 5;
+    if (!topic) return;
+
+    btn.disabled = true;
+    out.innerHTML = "<p class=\"meta\">Fetching papers and building embeddings…</p>";
+
+    try {
+      const data = await postJSON("/ingest", { topic, max_results: maxResults });
+      out.innerHTML = `<p>Saved <strong>${data.chunks_saved}</strong> chunks for "${escapeHtml(topic)}".</p>`;
+    } catch (err) {
+      out.innerHTML = `<p class="error">${escapeHtml(err.message)}</p>`;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  async function doSummarize() {
+    const btn = document.getElementById("summarize-btn");
+    const out = document.getElementById("summarize-result");
+    const topic = document.getElementById("summarize-topic").value.trim();
+    const maxResults = parseInt(document.getElementById("summarize-max").value, 10) || 5;
+    if (!topic) return;
+
+    btn.disabled = true;
+    out.innerHTML = "<p class=\"meta\">Fetching recent papers and summarizing…</p>";
+
+    try {
+      const data = await postJSON("/summarize_topic", { topic, max_results: maxResults });
+      const papers = (data.papers || [])
+        .map(
+          (p) => `
+            <div class="paper">
+              <div class="paper-title"><a href="${escapeHtml(p.url)}" target="_blank" rel="noopener">${escapeHtml(p.title)}</a></div>
+              <div class="paper-meta">${escapeHtml((p.authors || []).join(", "))} · ${escapeHtml(p.published)}</div>
+              <div>${escapeHtml(p.summary)}</div>
+            </div>
+          `
+        )
+        .join("");
+
+      out.innerHTML = `
+        <div class="answer">${escapeHtml(data.overall_summary)}</div>
+        <div class="meta">${data.papers.length} paper(s)</div>
+        ${papers}
+      `;
+    } catch (err) {
+      out.innerHTML = `<p class="error">${escapeHtml(err.message)}</p>`;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+</script>
+</body>
+</html>

@@ -289,6 +289,13 @@ docker build -t astra .
 docker run -p 8000:8000 --env-file .env astra
 ```
 
+### 7. Run Tests
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+Tests cover the pure logic (`chunk_text`, the retry-loop's `decide_next_step`, and `generate_node`/`verify_node`'s contracts) with `vectorstore`/`llm` stubbed out, so they run fast without needing a Groq API key, a downloaded embedding model, or network access.
+
 ---
 
 ## 📥 Example Input & Output
@@ -351,7 +358,7 @@ POST /ask
 - **Citation formatting** — return which specific chunk/paper supported each part of an answer, not just a binary "supported" flag
 - **Multi-paper comparison mode** — "compare the approach in paper A vs paper B"
 - **Persistent, larger-scale vector storage** — migrate from Chroma to Qdrant for larger paper corpora
-- **Unit test suite** — no automated tests exist yet
+- **CI workflow** — run the test suite automatically on every push/PR
 
 ---
 

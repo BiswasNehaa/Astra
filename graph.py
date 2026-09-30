@@ -15,7 +15,13 @@ def generate_node(state: GraphState) -> GraphState:
     from vectorstore import search
     from llm import ask_ai
 
-    results = search(state["question"], top_k=3)
+    # Widen retrieval on each retry so a failed verification actually gets a
+    # different, larger pool of context to work with, instead of repeating
+    # the exact same search and hoping for a different generation by chance.
+    attempt = state.get("loop_count", 0)
+    top_k = 3 + (2 * attempt)
+
+    results = search(state["question"], top_k=top_k)
     chunks = results["documents"][0]
     metadatas = results["metadatas"][0]
     state["context_chunks"] = chunks
@@ -49,8 +55,10 @@ def verify_node(state: GraphState) -> GraphState:
 
     context = "\n\n".join(state["context_chunks"])
     verify_prompt = f"""You are a strict fact-checker.
-Check if the ANSWER below is fully supported by the CONTEXT.
-Respond with ONLY one word: "yes" or "no".
+Check whether EVERY factual claim in the ANSWER below is directly stated in
+the CONTEXT. If any part of the answer is not directly supported by the
+context, the whole answer counts as unsupported - do not give partial credit.
+Respond with ONLY one word, exactly "yes" or "no", with no other text.
 
 Context:
 {context}
@@ -58,8 +66,21 @@ Context:
 Answer:
 {state["answer"]}
 """
-    verdict = ask_ai(verify_prompt).strip().lower()
-    state["is_supported"] = "yes" in verdict
+    # temperature=0 so the same answer+context pair gets a consistent verdict
+    # every time, instead of the yes/no judgment itself being non-deterministic.
+    verdict = ask_ai(verify_prompt, temperature=0).strip().lower()
+    state["is_supported"] = verdict.startswith("yes")
+
+    # If we've exhausted our retries and still can't verify the answer,
+    # don't silently hand back a possibly-hallucinated draft as if it were
+    # a normal answer - say so explicitly.
+    if not state["is_supported"] and state["loop_count"] >= 2:
+        state["answer"] = (
+            "I don't have enough reliably supported information in the "
+            "retrieved sources to answer this confidently. Best attempt "
+            f"(not fully verified): {state['answer']}"
+        )
+
     return state
 
 

@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from graph import compiled_graph
 from ingestion import ingest_papers
@@ -44,3 +45,8 @@ def ingest(request: IngestRequest):
 @app.post("/summarize_topic")
 def summarize(request: SummarizeRequest):
     return summarize_topic(request.topic, request.max_results)
+
+
+# Minimal demo UI (static HTML/JS, no build step) - lets someone try
+# /ask, /ingest, and /summarize_topic from a browser instead of curl/Swagger.
+app.mount("/ui", StaticFiles(directory="static", html=True), name="ui")

@@ -34,6 +34,7 @@ def ask(request: QueryRequest):
         "supported": result["is_supported"],
         "attempts": result["loop_count"],
         "sources": result["sources"],
+        "citations": result["citations"],
     }
 
 

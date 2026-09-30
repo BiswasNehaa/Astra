@@ -117,7 +117,7 @@ User Question
 ```
 Astra/
 ├── main.py          # FastAPI app, /ask, /ingest, and /summarize_topic endpoints
-├── graph.py          # LangGraph pipeline: generate → verify → retry
+├── graph.py          # LangGraph pipeline: generate → verify → retry/cite
 ├── rag.py            # Original single-pass RAG (superseded, kept for reference)
 ├── llm.py             # ask_ai() — wraps the Groq API call
 ├── embeddings.py       # get_embedding() — BGE embeddings
@@ -195,6 +195,18 @@ Astra/
 
 ---
 
+### Stage G — Citation Attribution
+
+**What it does:** Once an answer is verified as supported, one more LLM call breaks the answer into its individual claims and maps each claim to the specific context chunk(s) (and therefore paper/title/URL) that back it up — returned as `citations` in the `/ask` response, alongside the existing flat `sources` list.
+
+**Why this is a separate call after verification, not part of it:** verification only needs a yes/no judgment; asking for a structured claim-by-claim breakdown at the same time would make that prompt heavier and slower for the common case. Splitting it out means the extra cost is paid once, only for answers that already passed verification — a hallucinated/unsupported answer (see Stage E) skips citation entirely, since attributing claims in a discarded draft isn't useful.
+
+**Why this doesn't block on a rigid schema:** the LLM is asked for a JSON array and the response is parsed defensively — if it wraps the array in prose, extra whitespace, or a code fence, the parser extracts just the `[...]` portion before calling `json.loads`. If parsing still fails, `citations` comes back as an empty list rather than crashing the request; `sources` (the coarser, always-available list) is unaffected either way.
+
+**Tradeoff:** this adds one more LLM call to every successful `/ask` request, on top of the existing generate (+ retries) and verify calls — a deliberate cost/latency-for-transparency tradeoff.
+
+---
+
 ## 🔧 Every Function Explained
 
 ### `embeddings.py`
@@ -263,9 +275,12 @@ Astra/
 **What:** Runs Stage D — checks the draft answer against the stored context chunks and sets `state["is_supported"]`.
 
 #### `decide_next_step(state) → str`
-**What:** The conditional logic — returns `"end"` if supported or the retry cap is reached, otherwise `"retry"`. This return value is used by LangGraph's `add_conditional_edges` to decide which node runs next.
+**What:** The conditional logic — returns `"end"` if supported or the retry cap is reached, otherwise `"retry"`. This return value is used by LangGraph's `add_conditional_edges` to decide which node runs next. Note that `"end"` routes to the `cite` node, not straight to `END` — see below.
 
 **Why this is a plain function, not a node:** it doesn't transform the state, it only makes a routing decision — LangGraph treats these as a distinct concept (a "conditional edge") from a "node."
+
+#### `cite_node(state) → state`
+**What:** Runs Stage G — for a verified answer, asks the LLM to map each claim in the answer to the context chunk(s) that support it, and stores the result (with title/URL attached) as `state["citations"]`. For an answer that never passed verification, sets `citations` to an empty list without making the extra call.
 
 ---
 
@@ -275,7 +290,7 @@ Astra/
 **What:** Accepts `{"topic": str, "max_results": int}`, calls `ingest_papers()`, returns how many chunks were saved.
 
 #### `POST /ask`
-**What:** Accepts `{"query": str}`, invokes the compiled LangGraph pipeline, and returns the final answer along with `supported` (bool) and `attempts` (loop count) — deliberately exposing this metadata so API consumers can see whether an answer was verified, not just trust it blindly.
+**What:** Accepts `{"query": str}`, invokes the compiled LangGraph pipeline, and returns the final answer along with `supported` (bool), `attempts` (loop count), `sources` (flat, deduplicated list of retrieved papers), and `citations` (claim-by-claim attribution — empty list if the answer never passed verification) — deliberately exposing this metadata so API consumers can see whether an answer was verified, not just trust it blindly.
 
 #### `POST /summarize_topic`
 **What:** Accepts `{"topic": str, "max_results": int}`, calls `summarize_topic()`, and returns `{"topic": str, "papers": [...], "overall_summary": str}` — a live, on-demand literature-review-style overview of a topic, independent of anything previously ingested.
@@ -348,7 +363,24 @@ POST /ask
 {
   "answer": "A spacecraft can be moved between two circular orbits using a Hohmann transfer orbit, which involves two engine burns.",
   "supported": true,
-  "attempts": 1
+  "attempts": 1,
+  "sources": [
+    {"title": "Optimal Orbital Transfer Strategies", "url": "https://arxiv.org/abs/..."}
+  ],
+  "citations": [
+    {
+      "claim": "A Hohmann transfer orbit moves a spacecraft between two circular orbits.",
+      "sources": [
+        {"title": "Optimal Orbital Transfer Strategies", "url": "https://arxiv.org/abs/..."}
+      ]
+    },
+    {
+      "claim": "It involves two engine burns.",
+      "sources": [
+        {"title": "Optimal Orbital Transfer Strategies", "url": "https://arxiv.org/abs/..."}
+      ]
+    }
+  ]
 }
 ```
 
@@ -406,7 +438,6 @@ POST /summarize_topic
 - **Full PDF ingestion** — parse complete paper text, not just abstracts, for deeper Q&A
 - **Hosted embeddings API** — remove the local model's memory footprint, enabling free-tier deployment without hitting RAM limits
 - **Per-user rate limiting** on `/ask`
-- **Citation formatting** — return which specific chunk/paper supported each part of an answer, not just a binary "supported" flag
 - **Multi-paper comparison mode** — "compare the approach in paper A vs paper B"
 - **Persistent, larger-scale vector storage** — migrate from Chroma to Qdrant for larger paper corpora
 - **CI workflow** — run the test suite automatically on every push/PR

@@ -341,6 +341,28 @@ pytest
 ```
 Tests cover the pure logic (`chunk_text`, the retry-loop's `decide_next_step`, and `generate_node`/`verify_node`'s contracts) with `vectorstore`/`llm` stubbed out, so they run fast without needing a Groq API key, a downloaded embedding model, or network access.
 
+### 8. Deploy a Live Demo (Hugging Face Spaces)
+
+Render's free tier can't run this (see Known Limitations - the local embedding model + PyTorch exceed its 512MB RAM cap). **Hugging Face Spaces'** free CPU tier (~16GB RAM) comfortably fits it, builds directly from the existing `Dockerfile`, and needs no credit card.
+
+1. Create a free account at [huggingface.co](https://huggingface.co), then [create a new Space](https://huggingface.co/new-space).
+2. Pick **Docker** as the Space SDK and **Blank** as the template, free **CPU basic** hardware.
+3. Push this repo's code to the Space's git remote (shown on the Space's page after creation), e.g.:
+   ```bash
+   git remote add space https://huggingface.co/spaces/<your-username>/<space-name>
+   git push space main
+   ```
+4. In the Space's own `README.md` (separate from this one - HF generates it when the Space is created), make sure the YAML frontmatter at the top includes:
+   ```yaml
+   sdk: docker
+   app_port: 8000
+   ```
+   This matches the port this repo's `Dockerfile` already exposes - no Dockerfile changes needed.
+5. In the Space's **Settings → Repository secrets**, add `GROQ_API_KEY` with your key. Never commit it to `.env` in the repo itself.
+6. The Space builds automatically. Once live, visit `https://<your-username>-<space-name>.hf.space/ui/` for the demo page.
+
+**Note:** the free tier has no persistent storage - `data/chroma/` resets whenever the Space restarts or rebuilds, so you'll need to `/ingest` again after a restart. Fine for a demo; for anything longer-lived, Spaces also offers paid persistent storage.
+
 ---
 
 ## 📥 Example Input & Output
